@@ -18,7 +18,6 @@ def run_cli():
     """Простой CLI-цикл для интерактивной работы."""
     app = build_graph()
     print("AI агент с LangGraph. Выход: Ctrl+C или пустая строка.")
-    print("Подсказка: добавьте префикс 'mode=deep' для глубокого поиска (загрузка страниц).")
     while True:
         try:
             query = input("Введите запрос: ").strip()
@@ -30,20 +29,7 @@ def run_cli():
             print("Пустой ввод. Выходим.")
             break
 
-        mode = "fast"
-        lowered = query.lower()
-        if lowered.startswith("mode=deep"):
-            mode = "deep"
-            query = query.split(" ", 1)[1] if " " in query else ""
-        elif lowered.startswith("mode=fast"):
-            mode = "fast"
-            query = query.split(" ", 1)[1] if " " in query else ""
-
-        if not query:
-            print("Пустой ввод после указания режима. Выходим.")
-            break
-
-        state = AgentState(user_query=query, search_mode=mode)
+        state = AgentState(user_query=query, search_mode="deep")
         result = app.invoke(state)
 
         # Безопасно извлекаем ответ независимо от типа (AgentState или dict)

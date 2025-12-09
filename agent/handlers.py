@@ -15,7 +15,7 @@ from .chains import (
     build_sentiment_chain,
     build_summary_chain,
 )
-from .config import get_llm
+from .config import get_llm_for_node
 from .models import AgentState, IntentLiteral
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,12 @@ def ensure_chains() -> Dict[str, Runnable]:
     if _CHAINS is not None:
         return _CHAINS
     try:
-        llm = get_llm()
         _CHAINS = {
-            "intent": build_intent_chain(llm),
-            "search": build_search_chain(llm),
-            "summary": build_summary_chain(llm),
-            "sentiment": build_sentiment_chain(llm),
-            "fallback": build_fallback_chain(llm),
+            "intent": build_intent_chain(get_llm_for_node("intent")),
+            "search": build_search_chain(get_llm_for_node("search")),
+            "summary": build_summary_chain(get_llm_for_node("summarize")),
+            "sentiment": build_sentiment_chain(get_llm_for_node("sentiment")),
+            "fallback": build_fallback_chain(get_llm_for_node("fallback")),
         }
         return _CHAINS
     except Exception as exc:  # noqa: BLE001
@@ -50,28 +49,9 @@ def ensure_chains() -> Dict[str, Runnable]:
 
 def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentLiteral]:
     """
-    Оставляем допустимые интенты, убираем дубликаты и корректируем эвристиками:
-    - long text / просьба пересказать -> summarize
-    - слова про поиск -> search
-    - слова про тональность -> sentiment
-    - при отсутствии явных подсказок и коротком запросе — none
-    - search всегда перед summarize
+    Оставляем допустимые интенты, убираем дубликаты.
+    Сохраняем только намерения из заданного списка и обеспечиваем порядок: search перед summarize.
     """
-    text = user_query.lower()
-    has_summarize_hint = any(
-        phrase in text
-        for phrase in ("перескаж", "кратко", "суммар", "резюме", "обобщи", "конспект")
-    ) or len(user_query) > 300
-    has_sentiment_hint = any(
-        phrase in text
-        for phrase in ("тональн", "sentiment", "позитив", "негатив", "эмоци", "отзыв")
-    )
-    has_search_hint = any(
-        phrase in text
-        for phrase in ("найди", "поиск", "подбери", "ищи", "посмотри", "google")
-    )
-    long_text = len(user_query) > 300
-
     seen: set[str] = set()
     intents: list[IntentLiteral] = []
     for intent in raw:
@@ -81,31 +61,6 @@ def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentL
             continue
         seen.add(intent)
         intents.append(intent)
-
-    # если нет явных подсказок и запрос короткий — предпочтительно none
-    if (
-        not (has_search_hint or has_summarize_hint or has_sentiment_hint or long_text)
-        and intents
-        and intents != ["none"]
-        and len(user_query) < 200
-    ):
-        intents = []
-
-    if has_search_hint and "search" not in intents:
-        intents.append("search")
-
-    # ensure summarize when явно просят пересказ или длинный текст
-    if (has_summarize_hint or long_text) and "summarize" not in intents:
-        intents.append("summarize")
-
-    # ensure sentiment when явно просят оценку тона
-    if has_sentiment_hint and "sentiment" not in intents:
-        intents.append("sentiment")
-
-    # если остались только none и есть подсказки, заменяем
-    concrete = [i for i in intents if i != "none"]
-    if concrete:
-        intents = concrete
 
     try:
         search_idx = intents.index("search")
@@ -121,7 +76,7 @@ def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentL
     return ["none"]
 
 
-def _fetch_plain_text(url: str, max_bytes: int = 200_000, timeout: int = 10) -> str:
+def _fetch_plain_text(url: str, max_bytes: int = 200_000, timeout: int = 12) -> str:
     """Скачиваем HTML и приводим к простому тексту без тегов."""
     try:
         req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -147,12 +102,11 @@ def bump_index(state: AgentState) -> Dict[str, int]:
 
 def append_step_result(state: AgentState, label: str, payload: str) -> str:
     """Копим результаты шагов в финальном ответе."""
+    clean_payload = payload.replace("**", "")
     parts: list[str] = []
     if state.final_answer:
         parts.append(state.final_answer)
-    else:
-        parts.append(f"Запрос: {state.user_query}")
-    parts.append(f"{label}:\n{payload}")
+    parts.append(f"{label}:\n{clean_payload}")
     return "\n\n".join(parts)
 
 
@@ -168,12 +122,13 @@ def intent_recognition_node(state: AgentState) -> Dict:
         return {
             "detected_intents": intents,
             "intermediate_result": state.user_query,
-            "final_answer": f"Запрос: {state.user_query}",
+            "final_answer": None,
             "next_intent_index": 0,
         }
     except Exception as exc:  # noqa: BLE001
         error_msg = (
-            "Не удалось определить интенты (проверьте ключ/доступ cloud.ru). Детали: "
+            "Не удалось определить интенты (проверьте ключ/квоты OpenRouter). "
+            "Детали: "
             f"{exc}"
         )
         logger.error(error_msg)
@@ -207,10 +162,7 @@ def search_tool_handler(state: AgentState) -> Dict:
                     urls.append(url)
                 snippet = item.get("body") or ""
                 results_lines.append(f"- {title} ({url}): {snippet}")
-        if results_lines:
-            payload = "Реальные результаты поиска (DuckDuckGo):\n" + "\n".join(results_lines)
-        else:
-            payload = ""
+        payload = "\n".join(results_lines)
     except Exception as exc:  # noqa: BLE001
         logger.error("Ошибка DuckDuckGo: %s", exc)
         payload = ""
@@ -223,12 +175,12 @@ def search_tool_handler(state: AgentState) -> Dict:
                 f"- {item.title} ({item.url}): {item.snippet}"
                 for item in results.results
             ]
-            payload = "Фейковые результаты поиска (LLM):\n" + "\n".join(lines)
+            payload = "\n".join(lines)
         except Exception as exc:  # noqa: BLE001
             logger.error("Ошибка псевдо-поиска: %s", exc)
             payload = (
-                "Не удалось получить результаты поиска, покажу заглушку.\n"
-                f"- Заглушка: {query}"
+                "Не удалось получить результаты поиска.\n"
+                f"- Запрос: {query}"
             )
             urls = []
 
@@ -244,23 +196,21 @@ def search_tool_handler(state: AgentState) -> Dict:
                 logger.error("Не удалось инициализировать LLM для глубокого поиска: %s", exc)
                 chains = None
 
-            for url in urls[:3]:
+            for url in urls[:2]:
                 page_text = _fetch_plain_text(url)
                 if not page_text:
                     continue
                 if chains is None:
                     continue
                 try:
-                    summary = chains["summary"].invoke({"content": page_text[:4000]})
+                    summary = chains["summary"].invoke({"content": page_text[:6000]})
                     deep_blocks.append(f"{url}\n{summary.content}")
                 except Exception as exc:  # noqa: BLE001
                     logger.error("Ошибка суммаризации страницы %s: %s", url, exc)
                     continue
         if deep_blocks:
-            deep_section = "Глубокое чтение страниц:\n" + "\n\n".join(deep_blocks)
+            deep_section = "Сводки страниц:\n" + "\n\n".join(deep_blocks)
             full_payload = payload + "\n\n" + deep_section if payload else deep_section
-        else:
-            full_payload = payload + "\n\n(Глубокое чтение не удалось — нет страниц или ошибка загрузки.)"
 
     updated = {
         "intermediate_result": full_payload,
@@ -316,7 +266,7 @@ def fallback_handler(state: AgentState) -> Dict:
         payload = str(reply.content)
     except Exception as exc:  # noqa: BLE001
         logger.error("Ошибка fallback-ответа: %s", exc)
-        payload = "Не удалось сформировать ответ."
+        payload = "Не удалось сформировать ответ (проверьте ключ/квоты OpenRouter)."
 
     updated = {
         "intermediate_result": payload,
