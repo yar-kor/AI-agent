@@ -1,0 +1,32 @@
+# Python / venv
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# IDE / OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Env and local configs
+.env
+.env.local
+*.log
+
+# Cache
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.cache/
+AI-agent_task.docx
+~$-agent_task.docx
