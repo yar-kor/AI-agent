@@ -29,7 +29,7 @@ def route_next(state: AgentState) -> str:
 
 
 def build_graph():
-    """Собираем и компилируем граф агента."""
+    """Собираем граф агента."""
     graph = StateGraph(AgentState)
     graph.add_node("intent_recognition", intent_recognition_node)
     graph.add_node("router", router_node)

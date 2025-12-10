@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def _invoke_with_failover(node: str, builder, payload: Dict):
     """
-    Пробуем поочередно модели ноды, пока не получится выполнить chain.invoke.
+    Пробуем поочередно модели ноды, пока не получится выполнить chain.invoke
     """
     last_error: Exception | None = None
     for model_name, llm in iter_llms_for_node(node):
@@ -32,7 +32,7 @@ def _invoke_with_failover(node: str, builder, payload: Dict):
             result = chain.invoke(payload)
             logger.info("Нода %s использовала модель %s", node, model_name)
             return result
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  
             last_error = exc
             logger.error("Ошибка в ноде %s на модели %s: %s", node, model_name, exc)
             continue
@@ -40,10 +40,7 @@ def _invoke_with_failover(node: str, builder, payload: Dict):
 
 
 def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentLiteral]:
-    """
-    Оставляем допустимые интенты, убираем дубликаты.
-    Сохраняем только намерения из заданного списка и обеспечиваем порядок: search перед summarize.
-    """
+  
     seen: set[str] = set()
     intents: list[IntentLiteral] = []
     for intent in raw:
@@ -69,7 +66,7 @@ def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentL
 
 
 def _fetch_plain_text(url: str, max_bytes: int = 300_000, timeout: int = 15) -> str:
-    """Скачиваем HTML и приводим к простому тексту без тегов."""
+    """Скачиваем HTML и нормализуем его"""
     try:
         req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urlopen(req, timeout=timeout) as resp:
@@ -88,12 +85,12 @@ def _fetch_plain_text(url: str, max_bytes: int = 300_000, timeout: int = 15) -> 
 
 
 def bump_index(state: AgentState) -> Dict[str, int]:
-    """Увеличиваем указатель текущего интента."""
+    
     return {"next_intent_index": state.next_intent_index + 1}
 
 
 def append_step_result(state: AgentState, label: str, payload: str) -> str:
-    """Копим результаты шагов в финальном ответе."""
+    
     clean_payload = payload.replace("**", "")
     parts: list[str] = []
     if state.final_answer:
@@ -102,10 +99,10 @@ def append_step_result(state: AgentState, label: str, payload: str) -> str:
     return "\n\n".join(parts)
 
 
-# --- Ноды графа ---
+# Ноды графа 
 
 def intent_recognition_node(state: AgentState) -> Dict:
-    """Распознаем интенты в пользовательском запросе."""
+    """Определяем интенты"""
     try:
         prediction = _invoke_with_failover(
             "intent", build_intent_chain, {"user_query": state.user_query}
@@ -118,7 +115,7 @@ def intent_recognition_node(state: AgentState) -> Dict:
             "final_answer": None,
             "next_intent_index": 0,
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         error_msg = (
             "Не удалось определить интенты (проверьте ключ/квоты Groq). "
             "Детали: "
@@ -134,18 +131,18 @@ def intent_recognition_node(state: AgentState) -> Dict:
 
 
 def router_node(state: AgentState) -> AgentState:
-    """Передаем состояние в маршрутизацию без изменений."""
+    
     return state
 
 
 def search_tool_handler(state: AgentState) -> Dict:
-    """Реальный поиск через DuckDuckGo с фолбэком на LLM."""
+    """Поиск через DuckDuckGo """
     query = state.intermediate_result or state.user_query
 
     results_lines: list[str] = []
     urls: list[str] = []
     try:
-        from ddgs import DDGS  # локальный импорт, чтобы не тянуть при старте
+        from ddgs import DDGS  
 
         with DDGS() as ddg:
             for item in ddg.text(query, max_results=5):
@@ -156,7 +153,7 @@ def search_tool_handler(state: AgentState) -> Dict:
                 snippet = item.get("body") or ""
                 results_lines.append(f"- {title} ({url}): {snippet}")
         payload = "\n".join(results_lines)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         logger.error("Ошибка DuckDuckGo: %s", exc)
         payload = ""
 
@@ -170,7 +167,7 @@ def search_tool_handler(state: AgentState) -> Dict:
                 for item in results.results
             ]
             payload = "\n".join(lines)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  
             logger.error("Ошибка псевдо-поиска: %s", exc)
             payload = (
                 "Не удалось получить результаты поиска.\n"
@@ -180,7 +177,7 @@ def search_tool_handler(state: AgentState) -> Dict:
 
     full_payload = payload
 
-    # Глубокий режим: скачиваем страницы и суммаризируем
+    # Скачиваем страницы и суммаризируем
     if state.search_mode == "deep":
         deep_blocks: list[str] = []
         if urls:
@@ -196,7 +193,7 @@ def search_tool_handler(state: AgentState) -> Dict:
                         for _, llm in iter_llms_for_node("summarize"):
                             summary_llm = llm
                             break
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:  
                         logger.error("Не удалось получить LLM для суммаризации: %s", exc)
                         summary_llm = None
                 if summary_llm is None:
@@ -225,14 +222,14 @@ def search_tool_handler(state: AgentState) -> Dict:
 
 
 def summarize_handler(state: AgentState) -> Dict:
-    """Суммаризация текущего промежуточного результата."""
+    
     content = state.intermediate_result or state.user_query
     try:
         summary = _invoke_with_failover(
             "summarize", build_summary_chain, {"content": content}
         )
         payload = str(summary.content)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         logger.error("Ошибка суммаризации: %s", exc)
         payload = "Не удалось сделать краткое изложение."
 
@@ -245,14 +242,14 @@ def summarize_handler(state: AgentState) -> Dict:
 
 
 def sentiment_handler(state: AgentState) -> Dict:
-    """Определяем тональность текста."""
+   
     content = state.intermediate_result or state.user_query
     try:
         sentiment = _invoke_with_failover(
             "sentiment", build_sentiment_chain, {"content": content}
         )
         payload = str(sentiment.content)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         logger.error("Ошибка тональности: %s", exc)
         payload = "Не удалось определить тональность."
 
@@ -265,20 +262,19 @@ def sentiment_handler(state: AgentState) -> Dict:
 
 
 def fallback_handler(state: AgentState) -> Dict:
-    """Ответ напрямую через LLM, если интенты не найдены."""
+    
     try:
         reply = _invoke_with_failover(
             "fallback", build_fallback_chain, {"query": state.user_query}
         )
         payload = str(reply.content)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         logger.error("Ошибка fallback-ответа: %s", exc)
         payload = "Не удалось сформировать ответ (проверьте ключ/квоты Groq)."
 
     updated = {
         "intermediate_result": payload,
         "detected_intents": state.detected_intents or ["none"],
-        # Для финального ответа избегаем лишних префиксов — выводим текст как есть.
         "final_answer": payload,
     }
     updated.update(bump_index(state))

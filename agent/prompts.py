@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from langchain_core.prompts import ChatPromptTemplate
 
-# Промпт для определения интентов
 INTENT_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
@@ -29,7 +28,7 @@ INTENT_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
-# Промпт для псевдо-поиска
+# Промпт для псевдо-поиска, если настоящий поиск будет выдавать ошибки
 SEARCH_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
@@ -48,7 +47,6 @@ SEARCH_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
-# Промпт для суммаризации результатов поиска
 SUMMARY_PROMPT = ChatPromptTemplate.from_template(
     "У тебя список результатов поиска (заголовок, URL и сниппет). "
     "Сформулируй 3-4 разных фактических тезиса по содержанию сниппетов на русском языке, "
@@ -61,7 +59,6 @@ SUMMARY_PROMPT = ChatPromptTemplate.from_template(
     "{content}"
 )
 
-# Промпт для тональности
 SENTIMENT_PROMPT = ChatPromptTemplate.from_template(
     "Определи тональность текста.\n"
     "- Если в запросе одна реплика, верни общую тональность: `<тональность>: <краткое обоснование>`.\n"
@@ -78,7 +75,6 @@ SENTIMENT_PROMPT = ChatPromptTemplate.from_template(
     "{content}"
 )
 
-# Промпт для fallback
 FALLBACK_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", "Ответь на запрос пользователя кратко и по существу."),

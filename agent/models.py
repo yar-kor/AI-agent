@@ -9,7 +9,6 @@ SearchModeLiteral = Literal["fast", "deep"]
 
 
 class AgentState(BaseModel):
-    """Состояние графа на каждом шаге."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
