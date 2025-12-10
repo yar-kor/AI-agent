@@ -5,7 +5,7 @@ from __future__ import annotations
 
 Запуск:
 1) Установите зависимости: pip install -r requirements.txt
-2) Создайте .env с переменной OPENROUTER_API_KEY (и при необходимости OPENROUTER_*), при желании отредактируйте llm_config.yaml.
+2) Создайте .env с переменной GROQ_API_KEY (и при необходимости GROQ_BASE_URL), при желании отредактируйте llm_config.yaml.
 3) Выполните: python main.py
 """
 

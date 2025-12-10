@@ -11,18 +11,15 @@ import yaml
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
-# Список кодов ошибок, при которых имеет смысл переключаться на следующую модель
-RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
 # Загружаем переменные из .env
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Дефолтная конфигурация LLMов и параметров сэмплинга (бесплатные модели OpenRouter)
+# Дефолтная конфигурация LLMов и параметров сэмплинга (Groq)
 DEFAULT_LLM_CONFIG: Dict[str, Any] = {
     "defaults": {
-        "model": "openai/gpt-oss-20b:free",
+        "model": "llama-3.1-8b-instant",
         "temperature": 0.3,
         "top_p": 1.0,
         "max_tokens": 1024,
@@ -30,38 +27,38 @@ DEFAULT_LLM_CONFIG: Dict[str, Any] = {
     "nodes": {
         "intent": {
             "models": [
-                {"model": "openai/gpt-oss-20b:free", "temperature": 0.0, "max_tokens": 256},
-                {"model": "mistralai/mistral-7b-instruct:free", "temperature": 0.0, "max_tokens": 256},
-                {"model": "meta-llama/llama-3.2-3b-instruct:free", "temperature": 0.1, "max_tokens": 256},
+                {"model": "llama-3.3-70b-versatile", "temperature": 0.0, "max_tokens": 256},
+                {"model": "llama-3.1-8b-instant", "temperature": 0.0, "max_tokens": 256},
+                {"model": "qwen/qwen3-32b", "temperature": 0.0, "max_tokens": 256},
             ]
         },
         "search": {
             "models": [
-                {"model": "openai/gpt-oss-20b:free", "temperature": 0.25, "max_tokens": 512},
-                {"model": "mistralai/mistral-7b-instruct:free", "temperature": 0.2, "max_tokens": 512},
+                {"model": "llama-3.3-70b-versatile", "temperature": 0.25, "max_tokens": 640},
+                {"model": "llama-3.1-8b-instant", "temperature": 0.2, "max_tokens": 640},
+                {"model": "qwen/qwen3-32b", "temperature": 0.25, "max_tokens": 640},
             ]
         },
         "summarize": {
             "models": [
-                {"model": "openai/gpt-oss-20b:free", "temperature": 0.25, "max_tokens": 768},
-                {"model": "mistralai/mistral-7b-instruct:free", "temperature": 0.25, "max_tokens": 768},
-                {"model": "moonshotai/kimi-k2:free", "temperature": 0.4, "max_tokens": 768},
+                {"model": "llama-3.3-70b-versatile", "temperature": 0.3, "max_tokens": 1024},
+                {"model": "llama-3.1-8b-instant", "temperature": 0.3, "max_tokens": 1024},
+                {"model": "qwen/qwen3-32b", "temperature": 0.3, "max_tokens": 1024},
             ]
         },
         "sentiment": {
             "models": [
-                {"model": "openai/gpt-oss-20b:free", "temperature": 0.1, "max_tokens": 256},
-                {"model": "mistralai/mistral-7b-instruct:free", "temperature": 0.1, "max_tokens": 256},
-                {"model": "meta-llama/llama-3.2-3b-instruct:free", "temperature": 0.1, "max_tokens": 256},
+                {"model": "llama-3.1-8b-instant", "temperature": 0.1, "max_tokens": 256},
+                {"model": "llama-3.3-70b-versatile", "temperature": 0.1, "max_tokens": 256},
+                {"model": "qwen/qwen3-32b", "temperature": 0.1, "max_tokens": 256},
             ]
         },
         "fallback": {
             "models": [
-                {"model": "openai/gpt-oss-20b:free", "temperature": 0.6, "max_tokens": 1024},
-                {"model": "mistralai/mistral-7b-instruct:free", "temperature": 0.6, "max_tokens": 1024},
-                {"model": "moonshotai/kimi-k2:free", "temperature": 0.7, "max_tokens": 1024},
-                {"model": "meta-llama/llama-3.2-3b-instruct:free", "temperature": 0.6, "max_tokens": 1024},
-                {"model": "openai/gpt-oss-120b:free", "temperature": 0.6, "max_tokens": 1024},
+                {"model": "llama-3.3-70b-versatile", "temperature": 0.6, "max_tokens": 1200},
+                {"model": "llama-3.1-8b-instant", "temperature": 0.6, "max_tokens": 1200},
+                {"model": "qwen/qwen3-32b", "temperature": 0.6, "max_tokens": 1200},
+                {"model": "moonshotai/kimi-k2-instruct-0905", "temperature": 0.65, "max_tokens": 1200},
             ]
         },
     },
@@ -124,29 +121,14 @@ def _as_int(value: Any, fallback: int) -> int:
         return fallback
 
 
-@lru_cache(maxsize=64)
-def _build_chat_llm(
-    model: str,
-    temperature: float,
-    top_p: float,
-    max_tokens: int,
-    base_url: str,
-    referer: str | None,
-    title: str | None,
-) -> ChatOpenAI:
-    """Создает и кэширует клиент ChatOpenAI под OpenRouter."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
+def _build_chat_llm(model: str, temperature: float, top_p: float, max_tokens: int, base_url: str) -> ChatOpenAI:
+    """Создает клиент ChatOpenAI под Groq (OpenAI-совместимый API)."""
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "Переменная окружения OPENROUTER_API_KEY не найдена. "
-            "Добавьте ее в .env или окружение с вашим ключом OpenRouter."
+            "Переменная окружения GROQ_API_KEY не найдена. "
+            "Добавьте ее в .env или окружение с вашим ключом Groq."
         )
-
-    headers = {}
-    if referer:
-        headers["HTTP-Referer"] = referer
-    if title:
-        headers["X-Title"] = title
 
     return ChatOpenAI(
         api_key=api_key,
@@ -155,15 +137,13 @@ def _build_chat_llm(
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,
-        default_headers=headers or None,
     )
 
 
-def get_llm_for_node(node: str) -> ChatOpenAI:
+def iter_llms_for_node(node: str):
     """
-    Возвращает ChatOpenAI для заданной ноды по конфигу (с приоритетным списком моделей).
-    Перебирает модели по порядку до первой успешно инициализированной.
-    Если вызов клиента вернет retryable ошибку, вызывающая сторона должна пробовать следующую модель.
+    Итератор по моделям для ноды в порядке приоритета.
+    Позволяет вызывающему коду попытаться переключиться на следующую модель при ошибках.
     """
     config = get_llm_config()
     defaults = config.get("defaults", {})
@@ -178,11 +158,8 @@ def get_llm_for_node(node: str) -> ChatOpenAI:
         )
         models = [{"model": fallback_model}]
 
-    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    referer = os.getenv("OPENROUTER_REFERER")
-    title = os.getenv("OPENROUTER_TITLE")
+    base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 
-    last_error: Exception | None = None
     for model_entry in models:
         merged = {**defaults, **(model_entry or {})}
         model_name = merged.get("model")
@@ -200,16 +177,8 @@ def get_llm_for_node(node: str) -> ChatOpenAI:
                 top_p=top_p,
                 max_tokens=max_tokens,
                 base_url=base_url,
-                referer=referer,
-                title=title,
             )
-            logger.info("Нода %s использует модель %s", node, model_name)
-            return llm
+            yield model_name, llm
         except Exception as exc:  # noqa: BLE001
-            last_error = exc
             logger.error("Не удалось инициализировать модель %s для ноды %s: %s", model_name, node, exc)
             continue
-
-    raise RuntimeError(
-        f"Не удалось подобрать ни одну модель для ноды {node}. Последняя ошибка: {last_error}"
-    )

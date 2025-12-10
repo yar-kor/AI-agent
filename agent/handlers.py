@@ -15,36 +15,28 @@ from .chains import (
     build_sentiment_chain,
     build_summary_chain,
 )
-from .config import get_llm_for_node
+from .config import iter_llms_for_node
 from .models import AgentState, IntentLiteral
 
 logger = logging.getLogger(__name__)
 
 
-# Инициализация цепочек лениво, чтобы не падать при импорте без ключа
-_CHAINS: Dict[str, Runnable] | None = None
-
-
-def ensure_chains() -> Dict[str, Runnable]:
+def _invoke_with_failover(node: str, builder, payload: Dict):
     """
-    Создаем цепочки при первом обращении.
-    Ошибки инициализации пробрасываем в вызывающий код для graceful деградации.
+    Пробуем поочередно модели ноды, пока не получится выполнить chain.invoke.
     """
-    global _CHAINS
-    if _CHAINS is not None:
-        return _CHAINS
-    try:
-        _CHAINS = {
-            "intent": build_intent_chain(get_llm_for_node("intent")),
-            "search": build_search_chain(get_llm_for_node("search")),
-            "summary": build_summary_chain(get_llm_for_node("summarize")),
-            "sentiment": build_sentiment_chain(get_llm_for_node("sentiment")),
-            "fallback": build_fallback_chain(get_llm_for_node("fallback")),
-        }
-        return _CHAINS
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Не удалось инициализировать LLM/цепочки: %s", exc)
-        raise
+    last_error: Exception | None = None
+    for model_name, llm in iter_llms_for_node(node):
+        try:
+            chain = builder(llm)
+            result = chain.invoke(payload)
+            logger.info("Нода %s использовала модель %s", node, model_name)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            logger.error("Ошибка в ноде %s на модели %s: %s", node, model_name, exc)
+            continue
+    raise RuntimeError(f"Не удалось выполнить ноду {node}. Последняя ошибка: {last_error}")
 
 
 def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentLiteral]:
@@ -76,7 +68,7 @@ def normalize_intents(raw: list[IntentLiteral], user_query: str) -> list[IntentL
     return ["none"]
 
 
-def _fetch_plain_text(url: str, max_bytes: int = 200_000, timeout: int = 12) -> str:
+def _fetch_plain_text(url: str, max_bytes: int = 300_000, timeout: int = 15) -> str:
     """Скачиваем HTML и приводим к простому тексту без тегов."""
     try:
         req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -115,8 +107,9 @@ def append_step_result(state: AgentState, label: str, payload: str) -> str:
 def intent_recognition_node(state: AgentState) -> Dict:
     """Распознаем интенты в пользовательском запросе."""
     try:
-        chains = ensure_chains()
-        prediction = chains["intent"].invoke({"user_query": state.user_query})
+        prediction = _invoke_with_failover(
+            "intent", build_intent_chain, {"user_query": state.user_query}
+        )
         intents = normalize_intents(prediction.intents, state.user_query)
         logger.info("Определены интенты: %s", intents)
         return {
@@ -127,7 +120,7 @@ def intent_recognition_node(state: AgentState) -> Dict:
         }
     except Exception as exc:  # noqa: BLE001
         error_msg = (
-            "Не удалось определить интенты (проверьте ключ/квоты OpenRouter). "
+            "Не удалось определить интенты (проверьте ключ/квоты Groq). "
             "Детали: "
             f"{exc}"
         )
@@ -169,8 +162,9 @@ def search_tool_handler(state: AgentState) -> Dict:
 
     if not payload:
         try:
-            chains = ensure_chains()
-            results = chains["search"].invoke({"query": query})
+            results = _invoke_with_failover(
+                "search", build_search_chain, {"query": query}
+            )
             lines = [
                 f"- {item.title} ({item.url}): {item.snippet}"
                 for item in results.results
@@ -190,31 +184,41 @@ def search_tool_handler(state: AgentState) -> Dict:
     if state.search_mode == "deep":
         deep_blocks: list[str] = []
         if urls:
-            try:
-                chains = ensure_chains()
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Не удалось инициализировать LLM для глубокого поиска: %s", exc)
-                chains = None
+            summary_llm = None
 
-            for url in urls[:2]:
+            for url in urls[:4]:
                 page_text = _fetch_plain_text(url)
                 if not page_text:
                     continue
-                if chains is None:
+                if summary_llm is None:
+                    try:
+                        # Берем первую доступную модель для summarize
+                        for _, llm in iter_llms_for_node("summarize"):
+                            summary_llm = llm
+                            break
+                    except Exception as exc:  # noqa: BLE001
+                        logger.error("Не удалось получить LLM для суммаризации: %s", exc)
+                        summary_llm = None
+                if summary_llm is None:
                     continue
                 try:
-                    summary = chains["summary"].invoke({"content": page_text[:6000]})
+                    chain = build_summary_chain(summary_llm)
+                    summary = chain.invoke({"content": page_text[:10000]})
                     deep_blocks.append(f"{url}\n{summary.content}")
                 except Exception as exc:  # noqa: BLE001
                     logger.error("Ошибка суммаризации страницы %s: %s", url, exc)
                     continue
         if deep_blocks:
-            deep_section = "Сводки страниц:\n" + "\n\n".join(deep_blocks)
-            full_payload = payload + "\n\n" + deep_section if payload else deep_section
+            deep_section = "\n\n".join(deep_blocks)
+            # Для финального ответа показываем только выдачу поиска,
+            # а детальные сводки отдадим на вход суммаризации.
+            intermediate_for_summary = payload + "\n\n" + deep_section if payload else deep_section
+        else:
+            intermediate_for_summary = payload
 
     updated = {
-        "intermediate_result": full_payload,
-        "final_answer": append_step_result(state, "Поиск", full_payload),
+        "intermediate_result": intermediate_for_summary if state.search_mode == "deep" else payload,
+        "final_answer": append_step_result(state, "Поиск", payload),
     }
     updated.update(bump_index(state))
     return updated
@@ -224,8 +228,9 @@ def summarize_handler(state: AgentState) -> Dict:
     """Суммаризация текущего промежуточного результата."""
     content = state.intermediate_result or state.user_query
     try:
-        chains = ensure_chains()
-        summary = chains["summary"].invoke({"content": content})
+        summary = _invoke_with_failover(
+            "summarize", build_summary_chain, {"content": content}
+        )
         payload = str(summary.content)
     except Exception as exc:  # noqa: BLE001
         logger.error("Ошибка суммаризации: %s", exc)
@@ -243,8 +248,9 @@ def sentiment_handler(state: AgentState) -> Dict:
     """Определяем тональность текста."""
     content = state.intermediate_result or state.user_query
     try:
-        chains = ensure_chains()
-        sentiment = chains["sentiment"].invoke({"content": content})
+        sentiment = _invoke_with_failover(
+            "sentiment", build_sentiment_chain, {"content": content}
+        )
         payload = str(sentiment.content)
     except Exception as exc:  # noqa: BLE001
         logger.error("Ошибка тональности: %s", exc)
@@ -261,12 +267,13 @@ def sentiment_handler(state: AgentState) -> Dict:
 def fallback_handler(state: AgentState) -> Dict:
     """Ответ напрямую через LLM, если интенты не найдены."""
     try:
-        chains = ensure_chains()
-        reply = chains["fallback"].invoke({"query": state.user_query})
+        reply = _invoke_with_failover(
+            "fallback", build_fallback_chain, {"query": state.user_query}
+        )
         payload = str(reply.content)
     except Exception as exc:  # noqa: BLE001
         logger.error("Ошибка fallback-ответа: %s", exc)
-        payload = "Не удалось сформировать ответ (проверьте ключ/квоты OpenRouter)."
+        payload = "Не удалось сформировать ответ (проверьте ключ/квоты Groq)."
 
     updated = {
         "intermediate_result": payload,
