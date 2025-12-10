@@ -258,7 +258,7 @@ def sentiment_handler(state: AgentState) -> Dict:
 
     updated = {
         "intermediate_result": payload,
-        "final_answer": append_step_result(state, "Тональность", payload),
+        "final_answer": append_step_result(state, "Анализ тональности", payload),
     }
     updated.update(bump_index(state))
     return updated
@@ -278,7 +278,8 @@ def fallback_handler(state: AgentState) -> Dict:
     updated = {
         "intermediate_result": payload,
         "detected_intents": state.detected_intents or ["none"],
-        "final_answer": append_step_result(state, "Ответ", payload),
+        # Для финального ответа избегаем лишних префиксов — выводим текст как есть.
+        "final_answer": payload,
     }
     updated.update(bump_index(state))
     return updated

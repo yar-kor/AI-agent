@@ -5,8 +5,9 @@ from __future__ import annotations
 
 Запуск:
 1) Установите зависимости: pip install -r requirements.txt
-2) Создайте .env с переменной GROQ_API_KEY (и при необходимости GROQ_BASE_URL), при желании отредактируйте llm_config.yaml.
-3) Выполните: python main.py
+2) Создайте .env с ключами провайдеров (минимум CLOUDRU_API_KEY для GigaChat; опционально GROQ_API_KEY и OPENROUTER_API_KEY) и при необходимости базовые URL.
+3) При желании отредактируйте llm_config.yaml.
+4) Выполните: python main.py
 """
 
 import logging
@@ -18,3 +19,4 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 if __name__ == "__main__":
     run_cli()
+    

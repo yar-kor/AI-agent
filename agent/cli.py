@@ -38,6 +38,6 @@ def run_cli():
             final_answer = result.get("final_answer") or result.get("intermediate_result")
         final_answer = final_answer or "Ответ не сформирован из-за ошибки."
 
-        print("\nФинальный ответ:")
+        print("\nОтвет:")
         print(final_answer)
         print("-" * 40)

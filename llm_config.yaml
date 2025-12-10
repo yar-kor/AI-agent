@@ -3,69 +3,181 @@ defaults:
   temperature: 0.3
   top_p: 1.0
   max_tokens: 1024
+  base_url: https://api.groq.com/openai/v1
+  api_key_env: GROQ_API_KEY
 
 nodes:
   intent:
     models:
-      - model: llama-3.3-70b-versatile
+      - model: ai-sage/GigaChat3-10B-A1.8B
         temperature: 0.0
         max_tokens: 256
+        base_url: https://foundation-models.api.cloud.ru/v1
+        api_key_env: CLOUDRU_API_KEY
+      - model: google/gemma-3-12b-it:free
+        temperature: 0.0
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
       - model: llama-3.1-8b-instant
         temperature: 0.0
         max_tokens: 256
-      - model: qwen/qwen3-32b
+      - model: mistralai/mistral-7b-instruct:free
         temperature: 0.0
         max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: qwen/qwen3-4b:free
+        temperature: 0.0
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-4b-it:free
+        temperature: 0.0
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: meta-llama/llama-3.2-3b-instruct:free
+        temperature: 0.0
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+
   search:
     models:
-      - model: llama-3.3-70b-versatile
+      - model: ai-sage/GigaChat3-10B-A1.8B
         temperature: 0.25
         max_tokens: 640
-      - model: meta-llama/llama-4-scout-17b-16e-instruct
-        temperature: 0.25
-        max_tokens: 640
+        base_url: https://foundation-models.api.cloud.ru/v1
+        api_key_env: CLOUDRU_API_KEY
       - model: llama-3.1-8b-instant
         temperature: 0.2
         max_tokens: 640
-      - model: qwen/qwen3-32b
+      - model: mistralai/mistral-7b-instruct:free
         temperature: 0.25
         max_tokens: 640
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: qwen/qwen3-4b:free
+        temperature: 0.25
+        max_tokens: 640
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-12b-it:free
+        temperature: 0.25
+        max_tokens: 640
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-4b-it:free
+        temperature: 0.25
+        max_tokens: 640
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: meta-llama/llama-3.2-3b-instruct:free
+        temperature: 0.25
+        max_tokens: 640
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+
   summarize:
     models:
-      - model: llama-3.3-70b-versatile
+      - model: ai-sage/GigaChat3-10B-A1.8B
         temperature: 0.3
         max_tokens: 1024
-      - model: meta-llama/llama-4-scout-17b-16e-instruct
+        base_url: https://foundation-models.api.cloud.ru/v1
+        api_key_env: CLOUDRU_API_KEY
+      - model: google/gemma-3-12b-it:free
         temperature: 0.3
         max_tokens: 1024
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
       - model: llama-3.1-8b-instant
         temperature: 0.3
         max_tokens: 1024
-      - model: qwen/qwen3-32b
+      - model: mistralai/mistral-7b-instruct:free
         temperature: 0.3
         max_tokens: 1024
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: qwen/qwen3-4b:free
+        temperature: 0.3
+        max_tokens: 1024
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-4b-it:free
+        temperature: 0.3
+        max_tokens: 1024
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: meta-llama/llama-3.2-3b-instruct:free
+        temperature: 0.3
+        max_tokens: 1024
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+
   sentiment:
     models:
+      - model: ai-sage/GigaChat3-10B-A1.8B
+        temperature: 0.1
+        max_tokens: 256
+        base_url: https://foundation-models.api.cloud.ru/v1
+        api_key_env: CLOUDRU_API_KEY
+      - model: google/gemma-3-4b-it:free
+        temperature: 0.1
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: qwen/qwen3-4b:free
+        temperature: 0.1
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: mistralai/mistral-7b-instruct:free
+        temperature: 0.1
+        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
       - model: llama-3.1-8b-instant
         temperature: 0.1
         max_tokens: 256
-      - model: llama-3.3-70b-versatile
+      - model: meta-llama/llama-3.2-3b-instruct:free
         temperature: 0.1
         max_tokens: 256
-      - model: qwen/qwen3-32b
-        temperature: 0.1
-        max_tokens: 256
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+
   fallback:
     models:
-      - model: llama-3.3-70b-versatile
-        temperature: 0.6
+      - model: ai-sage/GigaChat3-10B-A1.8B
+        temperature: 0.55
         max_tokens: 1200
+        base_url: https://foundation-models.api.cloud.ru/v1
+        api_key_env: CLOUDRU_API_KEY
       - model: llama-3.1-8b-instant
         temperature: 0.6
         max_tokens: 1200
-      - model: qwen/qwen3-32b
+      - model: mistralai/mistral-7b-instruct:free
         temperature: 0.6
         max_tokens: 1200
-      - model: moonshotai/kimi-k2-instruct-0905
-        temperature: 0.65
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-12b-it:free
+        temperature: 0.6
         max_tokens: 1200
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: qwen/qwen3-4b:free
+        temperature: 0.6
+        max_tokens: 1200
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: google/gemma-3-4b-it:free
+        temperature: 0.6
+        max_tokens: 1200
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
+      - model: meta-llama/llama-3.2-3b-instruct:free
+        temperature: 0.6
+        max_tokens: 1200
+        base_url: https://openrouter.ai/api/v1
+        api_key_env: OPENROUTER_API_KEY
